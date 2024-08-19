@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glucose Data</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+<h1>Glucose Data</h1>
+<table>
+    <thead>
+    <tr>
+        <th>Timestamp</th>
+        <th>Value</th>
+        <th>Unit</th>
+        <th>Type</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for reading in glucose_data %}
+        <tr>
+            <td>{{ reading['timestamp'] }}</td>
+            <td>{{ reading['value'] }}</td>
+            <td>{{ reading['unit'] }}</td>
+            <td>{{ reading['type'] }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<a href="{{ url_for('link') }}">Connect to Vital Link</a>
+</body>
+</html>

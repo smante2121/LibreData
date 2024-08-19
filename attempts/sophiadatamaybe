@@ -1,0 +1,119 @@
+from flask import Flask, jsonify, render_template, request, redirect, url_for
+import requests
+from datetime import datetime, timedelta
+from vital import DemoProviders
+from vital.client import Vital
+from vital.environment import VitalEnvironment
+import os
+from dotenv import load_dotenv
+import logging
+
+# Load environment variables
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+VITAL_ENVIRONMENT = os.getenv("VITAL_ENV")
+VITAL_REGION = os.getenv("VITAL_REGION")
+VITAL_API_KEY = os.getenv("VITAL_API_KEY")
+BASE_URL = "https://api.sandbox.tryvital.io"
+#DEMO_USER_ID = "b1652473-d35a-427a-a0fc-ee2b3d10a2e4"
+#LIBREVIEW_EMAIL = os.getenv("LIBREVIEW_EMAIL")
+#LIBREVIEW_PASSWORD = os.getenv("LIBREVIEW_PASSWORD")
+LIBREVIEW_EMAIL= username
+LIBREVIEW_PASSWORD= password
+DEMO_USER_ID= user_id
+# Set up Flask app
+app = Flask(__name__)
+
+# Set up Vital client
+client = Vital(
+    api_key=VITAL_API_KEY,
+    environment=VitalEnvironment.SANDBOX,
+)
+
+# Function to connect the demo user to the Freestyle Libre provider if not already connected
+def connect_demo_user(provider):
+    try:
+        demo_connection = client.link.connect_demo_provider(user_id=DEMO_USER_ID, provider=provider)
+        logger.info(f"Connected demo user to {provider}: {demo_connection}")
+    except Exception as e:
+        logger.info(f"Demo user is already connected to {provider} or an error occurred: {e}")
+
+# Function to connect to the abbott_libreview provider
+def connect_libreview():
+    token_response = client.link.token(user_id=DEMO_USER_ID)
+    link_token = token_response.link_token
+    logger.info(f"Generated link token: {link_token}")
+
+    try:
+        link_response = client.link.connect_email_auth_provider(
+            provider="abbott_libreview",
+            email=LIBREVIEW_EMAIL,
+            password=LIBREVIEW_PASSWORD,
+            vital_link_token=link_token
+        )
+        logger.info(f"Connected to abbott_libreview: {link_response}")
+    except Exception as e:
+        logger.error(f"Error connecting to abbott_libreview: {e}")
+
+# Define utility function to get glucose data
+def get_glucose_data(user_id, start_date, end_date):
+    headers = {
+        "Accept": "application/json",
+        "x-vital-api-key": VITAL_API_KEY,
+    }
+    logger.info(f"Fetching glucose data for user_id: {user_id} from {start_date} to {end_date}")
+    response = requests.get(
+        f"{BASE_URL}/v2/timeseries/{user_id}/glucose?start_date={start_date}&end_date={end_date}",
+        headers=headers
+    )
+    if response.status_code == 200:
+        logger.info("Successfully fetched glucose data")
+        glucose_data = response.json()
+
+        # Format the timestamps and convert values to mg/dL
+        for reading in glucose_data:
+            # reading['timestamp'] = datetime.strptime(reading['timestamp'], '%Y-%m-%dT%H:%M:%S.%fZ').strftime('%Y-%m-%d %H:%M:%S')
+            # Assume values are already in mg/dL, if conversion needed, apply here
+            reading['value'] = convert_to_mg_dl(reading['value'], reading['unit'])
+
+
+        return glucose_data
+    else:
+        logger.error(f"Failed to fetch glucose data: {response.json()}")
+        return {"error": response.json()}
+
+def convert_to_mg_dl(value, unit):
+    if unit == 'mmol/L':
+        return value * 18.0  # Convert mmol/L to mg/dL
+    return value
+@app.route('/')
+def index():
+    connect_demo_user(DemoProviders.FREESTYLE_LIBRE)
+    connect_libreview()
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    logger.info("Handling request to '/' endpoint")
+
+    glucose_data = get_glucose_data(DEMO_USER_ID, start_date, end_date)
+
+    if 'error' in glucose_data:
+        return render_template('error.html', error=glucose_data['error'])
+
+    return render_template('index.html', glucose_data=glucose_data)
+
+@app.route('/link')
+def link():
+    token_response = client.link.token(user_id=DEMO_USER_ID)
+    link_token = token_response.link_token
+    link_url = f"https://link.tryvital.io/?token={link_token}&env={VITAL_ENVIRONMENT}&region={VITAL_REGION}"
+    return render_template('link.html', link_url=link_url)
+
+@app.route('/redirect')
+def redirect_url():
+    state = request.args.get('state', 'unknown')
+    return f"Link flow completed with state: {state}"
+
+if __name__ == '__main__':
+    app.run(debug=True)

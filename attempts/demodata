@@ -1,0 +1,93 @@
+from flask import Flask, jsonify, render_template, request
+import requests
+from datetime import datetime, timedelta
+
+from vital import DemoProviders
+from vital.client import Vital
+from vital.environment import VitalEnvironment
+import os
+from dotenv import load_dotenv
+import logging
+
+# Load environment variables
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+VITAL_ENVIRONMENT = os.getenv("VITAL_ENV")
+VITAL_REGION = os.getenv("VITAL_REGION")
+VITAL_API_KEY = os.getenv("VITAL_API_KEY")
+user_id= "81639b17-1d73-449e-ba96-599495c4ec57"
+BASE_URL = "https://api.sandbox.tryvital.io"
+DEMO_USER_ID = "b1652473-d35a-427a-a0fc-ee2b3d10a2e4"
+# Set up Flask app
+app = Flask(__name__)
+
+# Set up Vital client
+client = Vital(
+    api_key=VITAL_API_KEY,
+    environment=VitalEnvironment.SANDBOX,
+)
+
+
+
+
+# Function to connect the demo user to the Freestyle Libre provider if not already connected
+def connect_demo_user():
+    try:
+        demo_connection = client.link.connect_demo_provider(user_id=DEMO_USER_ID, provider=DemoProviders.FREESTYLE_LIBRE)
+        logger.info(f"Connected demo user to Freestyle Libre: {demo_connection}")
+    except Exception as e:
+        logger.info(f"Demo user is already connected to Freestyle Libre or an error occurred: {e}")
+
+
+# Define utility function to get glucose data
+def get_glucose_data(user_id, start_date, end_date):
+    headers = {
+        "Accept": "application/json",
+        "x-vital-api-key": VITAL_API_KEY,
+    }
+    logger.info(f"Fetching glucose data for user_id: {user_id} from {start_date} to {end_date}")
+    response = requests.get(
+        f"{BASE_URL}/v2/timeseries/{user_id}/glucose?start_date={start_date}&end_date={end_date}",
+        headers=headers
+    )
+    if response.status_code == 200:
+        logger.info("Successfully fetched glucose data")
+        return response.json()
+    else:
+        logger.error(f"Failed to fetch glucose data: {response.json()}")
+        return {"error": response.json()}
+
+@app.route('/')
+def index():
+    connect_demo_user()
+    # demo_user_id = create_demo_user()
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    logger.info("Handling request to '/' endpoint")
+
+    #glucose_data = get_glucose_data(demo_user_id, start_date, end_date)
+    glucose_data = get_glucose_data(DEMO_USER_ID, start_date, end_date)
+
+    if 'error' in glucose_data:
+        return render_template('error.html', error=glucose_data['error'])
+
+    return render_template('index.html', glucose_data=glucose_data)
+
+@app.route('/link')
+def link():
+    token_response = client.link.token(user_id=DEMO_USER_ID)
+    # user_id = request.args.get('user_id', create_demo_user())
+    # token_response = client.link.token(user_id=user_id)
+    link_token = token_response.link_token
+    link_url = f"https://link.tryvital.io/?token={link_token}&env={VITAL_ENVIRONMENT}&region={VITAL_REGION}"
+    return render_template('link.html', link_url=link_url)
+
+@app.route('/redirect')
+def redirect_url():
+    state = request.args.get('state', 'unknown')
+    return f"Link flow completed with state: {state}"
+
+if __name__ == '__main__':
+    app.run(debug=True)

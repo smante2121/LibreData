@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        nav {
+            background-color: #333;
+            overflow: hidden;
+        }
+        nav ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+        nav ul li {
+            float: left;
+        }
+        nav ul li a {
+            display: block;
+            color: white;
+            text-align: center;
+            padding: 14px 16px;
+            text-decoration: none;
+        }
+        nav ul li a:hover {
+            background-color: #111;
+        }
+        .container {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px;
+        }
+        .column {
+            flex: 0 0 45%;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 2px 2px 12px #aaa;
+        }
+        h2 {
+            text-align: center;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        ul li {
+            margin: 10px 0;
+        }
+        ul li a {
+            text-decoration: none;
+            color: #333;
+            font-weight: bold;
+        }
+        ul li a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+<nav>
+    <ul>
+        <li><a href="{{ url_for('home') }}">Home</a></li>
+    </ul>
+</nav>
+<h1>Home Page</h1>
+<div class="container">
+    <div class="column">
+        <h2>Freestyle Libre Users</h2>
+        <ul>
+            {% for user in libre_users %}
+                <li><a href="{{ url_for('user_data', user_id=user.id) }}">{{ user.name }}</a></li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="column">
+        <h2>Dexcom Users</h2>
+        <ul>
+            {% for user in dexcom_users %}
+                <li><a href="{{ url_for('user_data', user_id=user.id) }}">{{ user.name }}</a></li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+</body>
+</html>
